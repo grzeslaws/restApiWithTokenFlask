@@ -1,0 +1,2 @@
+ignored-modules=flask_sqlalchemy
+ignored-classes=SQLObject,Registrant
