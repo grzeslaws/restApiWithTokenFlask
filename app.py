@@ -29,6 +29,7 @@ class Todo(db.Model):
     complete = db.Column(db.Boolean)
     user_id = db.Column(db.Integer)
 
+
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -37,14 +38,16 @@ def token_required(f):
         if "x-access-token" in request.headers:
             token = request.headers["x-access-token"]
             print(jwt.decode(token, "thisissecretkey"))
-        
+
         if not token:
             jsonify({"message": "Token is missing!"})
 
         try:
-            data = jwt.decode(token, app.config["SECRET_KEY"], algorithms=['HS256'])
+            data = jwt.decode(
+                token, app.config["SECRET_KEY"], algorithms=['HS256'])
             print(data)
-            current_user = User.query.filter_by(public_id=data["public_id"]).first()
+            current_user = User.query.filter_by(
+                public_id=data["public_id"]).first()
         except:
             return jsonify({"message": "Token is invalid!"}), 401
 
@@ -147,12 +150,68 @@ def login():
         return make_response("Could not verify", 401, {"WWW-Authenticate": 'Basic realm="Logi requireed!"'})
 
     if (check_password_hash(user.password, auth.password)):
-        data = {"public_id": user.public_id, "exp": datetime.datetime.utcnow() + datetime.timedelta(minutes=90)}
+        data = {"public_id": user.public_id,
+                "exp": datetime.datetime.utcnow() + datetime.timedelta(minutes=90)}
         token = jwt.encode(data, "thisissecretkey", 'HS256').decode('utf-8')
-    
+
         return jsonify({"token": token})
-    
+
     return make_response("Could not verify", 401, {"WWW-Authenticate": 'Basic realm="Logi requireed!"'})
+
+
+@app.route("/todo", methods=["GET"])
+def get_all_todo():
+    todos = Todo.query.all()
+    todos_return = []
+
+    for item in todos:
+        todo = {}
+        todo["id"] = item.id
+        todo["text"] = item.text
+        todo["complete"] = item.complete
+        todo["user_id"] = item.user_id
+        todos_return.append(todo)
+
+    return jsonify({"todos": todos_return})
+
+
+@app.route("/todo", methods=["POST"])
+@token_required
+def add_todo(current_user):
+    data = request.get_json()
+
+    todo = Todo(text=data["text"], complete=data["complete"], user_id=current_user.public_id)
+    db.session.add(todo)
+    db.session.commit()
+    return jsonify({"message": "Todo was created!"})
+
+
+@app.route("/todo/<id>", methods=["PUT"])
+def get_one_todo(id):
+
+    data = request.get_json()
+    todo = Todo.query.filter_by(id=id).first()
+
+    if not todo:
+        return jsonify({"message": "No todo found!"})
+
+    todo.complete = True
+    db.session.commit()
+
+    return jsonify({"message": "Todo was changed!"})
+
+
+@app.route("/todo/<id>", methods=["DELETE"])
+def delete_todo(id):
+
+    todo = Todo.query.filter_by(id=id).first()
+
+    if not todo:
+        return jsonify({"message": "No todo found!"})
+    db.session.delete(todo)
+    db.session.commit()
+
+    return jsonify({"message": "Todo was deleted!"})
 
 
 if __name__ == "__main__":
